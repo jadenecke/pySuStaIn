@@ -30,9 +30,34 @@ import csv
 import os
 import multiprocessing
 from functools import partial, partialmethod
+#from concurrent.futures import ProcessPoolExecutor as Pool
 
 import time
 import pathos
+
+# ########################
+# import multiprocessing.pool
+#
+# class NoDaemonProcess(multiprocessing.Process):
+#     @property
+#     def daemon(self):
+#         return False
+#
+#     @daemon.setter
+#     def daemon(self, value):
+#         pass
+#
+#
+# class NoDaemonContext(type(multiprocessing.get_context())):
+#     Process = NoDaemonProcess
+#
+# # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+# # because the latter is only a wrapper function, not a proper class.
+# class NestablePool(multiprocessing.pool.Pool):
+#     def __init__(self, *args, **kwargs):
+#         kwargs['context'] = NoDaemonContext()
+#         super(NestablePool, self).__init__(*args, **kwargs)
+# #########################
 
 #*******************************************
 #The data structure class for AbstractSustain. It has no data itself - the implementations of AbstractSustain need to define their own implementations of this class.
@@ -57,6 +82,8 @@ class AbstractSustainData(ABC):
     @abstractmethod
     def reindex(self, index):
         pass
+
+
 
 #*******************************************
 class AbstractSustain(ABC):
@@ -89,7 +116,7 @@ class AbstractSustain(ABC):
         self.N_S_max                    = N_S_max
         self.N_iterations_MCMC          = N_iterations_MCMC
 
-        self.num_cores                  = multiprocessing.cpu_count()
+        #self.num_cores                  = multiprocessing.cpu_count()
 
         self.output_folder              = output_folder
         self.dataset_name               = dataset_name
@@ -703,6 +730,11 @@ class AbstractSustain(ABC):
 
         partial_iter                        = partial(self._find_ml_iteration, sustainData)
         seed_sequences = np.random.SeedSequence(self.global_rng.integers(1e10))
+
+        # p = NestablePool
+        # p.ncpus = 10
+
+        #with Pool(max_workers=10) as outer_pool:
         pool_output_list                    = self.pool.map(partial_iter, seed_sequences.spawn(self.N_startpoints))
 
         if ~isinstance(pool_output_list, list):
@@ -940,7 +972,22 @@ class AbstractSustain(ABC):
 
         p_perm_k                            = np.zeros((M, N + 1, N_S))
 
+
+        ##################
+
+        # pool_output_list = self.pool.map(partial_iter, seed_sequences.spawn(self.N_startpoints))
+        #
+        # if ~isinstance(pool_output_list, list):
+        #     pool_output_list = list(pool_output_list)
+        #
+        # for s in range(N_S):
+        #     p_perm_k[:, :, s] = pool_output_list[s][0]
+
+
+        ##################
+        #lohnt nicht, da das über die anzahl an stages iteriert und ich noch nicht mal eine stage zum laufen bekomme
         for s in range(N_S):
+            #print("###### STAGE? " + str(s) + " ############")
             p_perm_k[:, :, s]               = self._calculate_likelihood_stage(sustainData, S[s])  #self.__calculate_likelihood_stage_linearzscoremodel_approx(data_local, S[s])
 
 

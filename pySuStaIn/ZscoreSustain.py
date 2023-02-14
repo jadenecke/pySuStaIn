@@ -17,12 +17,19 @@
 # Authors:      Peter Wijeratne (p.wijeratne@ucl.ac.uk) and Leon Aksman (leon.aksman@loni.usc.edu)
 # Contributors: Arman Eshaghi (a.eshaghi@ucl.ac.uk), Alex Young (alexandra.young@kcl.ac.uk), Cameron Shand (c.shand@ucl.ac.uk)
 ###
-from multiprocessing import Value
+
 import warnings
 from tqdm.auto import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import norm
+from functools import partial
+
+# import multiprocessing
+# from functools import partial, partialmethod
+# import pathos
+
+from concurrent.futures import ProcessPoolExecutor as Pool
 
 from pySuStaIn.AbstractSustain import AbstractSustainData
 from pySuStaIn.AbstractSustain import AbstractSustain
@@ -160,6 +167,40 @@ class ZscoreSustain(AbstractSustain):
         S                                   = S.reshape(1, len(S))
         return S
 
+    def _calc_point_value(self, ind, N, S_inv, possible_biomarkers, arange_N):
+        point_value = np.zeros(N + 2)
+
+        b = possible_biomarkers[ind]
+        event_location = np.concatenate([[0], S_inv[(self.stage_biomarker_index == b)[0]], [N]])
+        event_value = np.concatenate(
+            [[self.min_biomarker_zscore[ind]], self.stage_zscore[self.stage_biomarker_index == b],
+             [self.max_biomarker_zscore[ind]]])
+        for j in range(len(event_location) - 1):
+
+            if j == 0:  # FIXME: nasty hack to get Matlab indexing to match up - necessary here because indices are used for linspace limits
+
+                # original
+                # temp                   = np.arange(event_location[j],event_location[j+1]+2)
+                # point_value[i,temp]    = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+2)
+
+                # fastest by a bit
+                temp = arange_N[event_location[j]:(event_location[j + 1] + 2)]
+                N_j = event_location[j + 1] - event_location[j] + 2
+                point_value[temp] = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j,
+                                                                     arange_N[0:N_j])
+
+            else:
+                # original
+                # temp                   = np.arange(event_location[j] + 1, event_location[j + 1] + 2)
+                # point_value[i, temp]   = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+1)
+
+                # fastest by a bit
+                temp = arange_N[(event_location[j] + 1):(event_location[j + 1] + 2)]
+                N_j = event_location[j + 1] - event_location[j] + 1
+                point_value[temp] = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j,
+                                                                     arange_N[0:N_j])
+        return point_value
+
     def _calculate_likelihood_stage(self, sustainData, S):
         '''
          Computes the likelihood of a single linear z-score model using an
@@ -179,33 +220,73 @@ class ZscoreSustain(AbstractSustain):
 
         # all the arange you'll need below
         arange_N                            = np.arange(N + 2)
+        #print(" -------- FUNCTION: Calculate Likelihood Stage -------- ")
+        # for i in range(B):
+        #     #print(" -------- Loop Itter: Possible Biomarker: " + str(i) + " -------- ")
+        #     b                               = possible_biomarkers[i]
+        #     event_location                  = np.concatenate([[0], S_inv[(self.stage_biomarker_index == b)[0]], [N]])
+        #     event_value                     = np.concatenate([[self.min_biomarker_zscore[i]], self.stage_zscore[self.stage_biomarker_index == b], [self.max_biomarker_zscore[i]]])
+        #     for j in range(len(event_location) - 1):
+        #
+        #         if j == 0:  # FIXME: nasty hack to get Matlab indexing to match up - necessary here because indices are used for linspace limits
+        #
+        #             # original
+        #             #temp                   = np.arange(event_location[j],event_location[j+1]+2)
+        #             #point_value[i,temp]    = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+2)
+        #
+        #             # fastest by a bit
+        #             temp                    = arange_N[event_location[j]:(event_location[j + 1] + 2)]
+        #             N_j                     = event_location[j + 1] - event_location[j] + 2
+        #             point_value[i, temp]    = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j, arange_N[0:N_j])
+        #
+        #         else:
+        #             # original
+        #             #temp                   = np.arange(event_location[j] + 1, event_location[j + 1] + 2)
+        #             #point_value[i, temp]   = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+1)
+        #
+        #             # fastest by a bit
+        #             temp                    = arange_N[(event_location[j] + 1):(event_location[j + 1] + 2)]
+        #             N_j                     = event_location[j + 1] - event_location[j] + 1
+        #             point_value[i, temp]    = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j, arange_N[0:N_j])
 
-        for i in range(B):
-            b                               = possible_biomarkers[i]
-            event_location                  = np.concatenate([[0], S_inv[(self.stage_biomarker_index == b)[0]], [N]])
-            event_value                     = np.concatenate([[self.min_biomarker_zscore[i]], self.stage_zscore[self.stage_biomarker_index == b], [self.max_biomarker_zscore[i]]])
-            for j in range(len(event_location) - 1):
+        ##################
 
-                if j == 0:  # FIXME: nasty hack to get Matlab indexing to match up - necessary here because indices are used for linspace limits
+        # pool_output_list = self.pool.map(partial_iter, seed_sequences.spawn(self.N_startpoints))
+        #
+        # if ~isinstance(pool_output_list, list):
+        #     pool_output_list = list(pool_output_list)
+        #
+        # for s in range(N_S):
+        #     p_perm_k[:, :, s] = pool_output_list[s][0]
 
-                    # original
-                    #temp                   = np.arange(event_location[j],event_location[j+1]+2)
-                    #point_value[i,temp]    = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+2)
+        ##################
+        #print("calculating partial_calc_point_value")
+        partial_calc_point_value = partial(self._calc_point_value,
+                                           N=N,
+                                           S_inv=S_inv,
+                                           possible_biomarkers=possible_biomarkers,
+                                           arange_N=arange_N)
 
-                    # fastest by a bit
-                    temp                    = arange_N[event_location[j]:(event_location[j + 1] + 2)]
-                    N_j                     = event_location[j + 1] - event_location[j] + 2
-                    point_value[i, temp]    = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j, arange_N[0:N_j])
+        # p2 = pathos.multiprocessing.ProcessPool()  # pathos.multiprocessing.ParallelPool()
+        # p2.ncpus = multiprocessing.cpu_count()
+        #print("range of B: " + str(range(B)))
+        #partial_calc_point_value(0)
+        #print("done calculating test for 0 partial_calc_point_value")
 
-                else:
-                    # original
-                    #temp                   = np.arange(event_location[j] + 1, event_location[j + 1] + 2)
-                    #point_value[i, temp]   = np.linspace(event_value[j],event_value[j+1],event_location[j+1]-event_location[j]+1)
 
-                    # fastest by a bit
-                    temp                    = arange_N[(event_location[j] + 1):(event_location[j + 1] + 2)]
-                    N_j                     = event_location[j + 1] - event_location[j] + 1
-                    point_value[i, temp]    = ZscoreSustain.linspace_local2(event_value[j], event_value[j + 1], N_j, arange_N[0:N_j])
+        # with Pool(max_workers=4) as inner_pool:
+        #     pool_output_list = inner_pool.map(partial_calc_point_value, range(B))
+
+        pool_output_list = [partial_calc_point_value(ind) for ind in range(B)]
+        #print("done calculating partial_calc_point_value")
+
+
+        if ~isinstance(pool_output_list, list):
+            pool_output_list = list(pool_output_list)
+
+        for s in range(B):
+            point_value[s, :] = pool_output_list[s][0]
+
 
         stage_value                         = 0.5 * point_value[:, :point_value.shape[1] - 1] + 0.5 * point_value[:, 1:]
 

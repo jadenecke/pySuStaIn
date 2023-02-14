@@ -120,7 +120,7 @@ if __name__ == "__main__":
     group.add_argument(
         "-c", "--sustainclass",
         type=str,
-        default="mixturesustain",
+        default="zscoresustain",
         choices=[i.__name__.lower() for i in pySuStaIn.AbstractSustain.__subclasses__()] + [i.__name__.lower().replace("sustain", "") for i in pySuStaIn.AbstractSustain.__subclasses__()],
         help="Name of single class to create new validation"
     )

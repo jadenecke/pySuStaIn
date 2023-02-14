@@ -21,7 +21,7 @@ def initialize_validation(seed):
             "use_parallel_startpoints": True,
             "seed": seed
         },
-        "n_biomarkers": 4,
+        "n_biomarkers": 15,
         "n_samples": 500,
         "n_subtypes": 3,
     }
