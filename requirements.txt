@@ -12,3 +12,4 @@ kde_ebm @ git+https://github.com/ucl-pond/kde_ebm.git
 tqdm
 multiprocess==0.70.13
 pathos==0.2.9
+joblib
