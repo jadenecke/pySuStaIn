@@ -27,6 +27,7 @@ import matplotlib.colors as mcolors
 from pathlib import Path
 import pickle
 import csv
+import time
 import os
 import multiprocessing
 from functools import partial, partialmethod
@@ -703,7 +704,12 @@ class AbstractSustain(ABC):
 
         partial_iter                        = partial(self._find_ml_iteration, sustainData)
         seed_sequences = np.random.SeedSequence(self.global_rng.integers(1e10))
-        pool_output_list                    = tqdm(self.pool.imap(partial_iter, seed_sequences.spawn(self.N_startpoints)))
+        start = time.time()
+
+        pool_output_list                    = self.pool.map(partial_iter, seed_sequences.spawn(self.N_startpoints))
+
+        end = time.time()
+        print("Elapsed Time: " + str(end - start))
 
         if ~isinstance(pool_output_list, list):
             pool_output_list                = list(pool_output_list)
