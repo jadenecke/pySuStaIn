@@ -703,7 +703,7 @@ class AbstractSustain(ABC):
 
         partial_iter                        = partial(self._find_ml_iteration, sustainData)
         seed_sequences = np.random.SeedSequence(self.global_rng.integers(1e10))
-        pool_output_list                    = self.pool.map(partial_iter, seed_sequences.spawn(self.N_startpoints))
+        pool_output_list                    = tqdm(self.pool.imap(partial_iter, seed_sequences.spawn(self.N_startpoints)))
 
         if ~isinstance(pool_output_list, list):
             pool_output_list                = list(pool_output_list)
