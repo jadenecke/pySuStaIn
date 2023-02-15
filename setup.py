@@ -1,6 +1,6 @@
 # Authors: Leon Aksman <l.aksman@ucl.ac.uk>
 # License: TBC
-__version__ = '0.1'
+__version__ = '0.1.1'
 
 from setuptools import setup
 
